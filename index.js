@@ -32,7 +32,7 @@ async function getAccessToken() {
 }
 
 // Send FCM notification
-async function sendNotification(tokenKey,token, title, body) {
+async function sendNotification(tokenKey,token, title, body,data={}) {
   try {
     const accessToken = await getAccessToken();
 
@@ -42,7 +42,8 @@ async function sendNotification(tokenKey,token, title, body) {
           "data": {
             "title": `${title} 🚨`,
             "body": body,
-            "type": "alert"
+            "type": "alert",
+            "data": data
           },
           "android": {
             "priority": "high"
@@ -80,7 +81,7 @@ async function deleteToken(tokenKey){
 // POST endpoint to send notification
 app.post('/send', async (req, res) => {
   try {
-    const {title,body} = req.body;
+    const {title,body,data} = req.body;
     const snapshot = await db.ref("fcmTokens").get();
 
     if (!snapshot.exists()) {
@@ -94,7 +95,7 @@ app.post('/send', async (req, res) => {
     const keys = Object.keys(tokensObj);
 
     for(var i =0; i<tokens.length ; i ++){
-      sendNotification(keys[i],tokens[i],title,body)
+      sendNotification(keys[i],tokens[i],title,body,data)
     }
     res.json({'status':true,'message':"successfully sent"});
   } catch (error) {
