@@ -32,24 +32,29 @@ async function getAccessToken() {
 }
 
 // Send FCM notification
-async function sendNotification(tokenKey,token, title, body,data={}) {
+async function sendNotification(tokenKey, token, data = {}) {
   try {
+    // ✅ Destructure title, body, and remaining keys from passed data (not req.body)
+    const { title, body, ...extraData } = data;
+
     const accessToken = await getAccessToken();
 
     const message = {
-        "message": {
-          "token": token,
-          "data": {
-            "title": `${title} 🚨`,
-            "body": body,
-            "type": "alert",
-            "data": data
-          },
-          "android": {
-            "priority": "high"
-          }
-        }
-      };
+      message: {
+        token: token,
+        data: {
+          title: `${title || "Alert"} 🚨`,
+          body: body || "",
+          type: "alert",
+          ...extraData, // 👈 merges all other key-value pairs (e.g., TPLNR: "1710")
+        },
+        android: {
+          priority: "high",
+        },
+      },
+    };
+
+    console.log("Sending message:", JSON.stringify(message, null, 2));
 
     const response = await axios.post(
       `https://fcm.googleapis.com/v1/projects/${PROJECT_ID}/messages:send`,
@@ -61,13 +66,19 @@ async function sendNotification(tokenKey,token, title, body,data={}) {
         },
       }
     );
-    console.log('FCM Response:', response.data);
+
+    console.log("✅ FCM Response:", response.data);
     return response.data;
+
   } catch (error) {
-    deleteToken(tokenKey);
-    
+    console.error(
+      "❌ Error sending FCM notification:",
+      error.response ? error.response.data : error.message
+    );
+    deleteToken(tokenKey); // Optional: handle invalid tokens
   }
 }
+
 
 async function deleteToken(tokenKey){
   const ref = db.ref("fcmTokens").child(tokenKey);
@@ -78,31 +89,32 @@ async function deleteToken(tokenKey){
 
 
 
-// POST endpoint to send notification
+// ✅ POST endpoint to send notification
 app.post('/send', async (req, res) => {
   try {
-    const {title,body,data} = req.body;
-    const snapshot = await db.ref("fcmTokens").get();
+    const data = req.body || {};
 
+    const snapshot = await db.ref("fcmTokens").get();
     if (!snapshot.exists()) {
-      return res.status(404).json({error: "❌ No tokens found"});
+      return res.status(404).json({ error: "❌ No tokens found" });
     }
 
     const tokensObj = snapshot.val();
-
-    // Convert object values into an array of tokens
     const tokens = Object.values(tokensObj);
     const keys = Object.keys(tokensObj);
 
-    for(var i =0; i<tokens.length ; i ++){
-      sendNotification(keys[i],tokens[i],title,body,data)
+    for (let i = 0; i < tokens.length; i++) {
+      // 👇 Pass the necessary info only
+      await sendNotification(keys[i], tokens[i], data);
     }
-    res.json({'status':true,'message':"successfully sent"});
+
+    res.json({ status: true, message: "✅ Successfully sent" });
   } catch (error) {
-    console.error('Error sending notification:', error);
-    res.status(500).json({ error: 'Failed to send notification' });
+    console.error("Error sending notification:", error);
+    res.status(500).json({ error: "Failed to send notification" });
   }
 });
+
 
 // Start server
 const PORT = 3000;
